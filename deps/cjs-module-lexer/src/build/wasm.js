@@ -4,7 +4,7 @@ const WASM_BUILDER_CONTAINER = 'ghcr.io/nodejs/wasm-builder@sha256:975f391d907e4
 
 const WASM_OPT = './wasm-opt'
 
-const { execSync } = require('node:child_process')
+const { execSync, execFileSync } = require('node:child_process')
 const { writeFileSync, readFileSync, existsSync, mkdirSync } = require('node:fs')
 const { join, resolve } = require('node:path')
 
@@ -36,7 +36,8 @@ if (process.argv[2] === '--docker') {
            --mount type=bind,source=${ROOT}/include-wasm,target=/home/node/build/include-wasm \
            -t ${WASM_BUILDER_CONTAINER} node wasm.js`
   console.log(`> ${cmd}\n\n`)
-  execSync(cmd, { stdio: 'inherit' })
+  const [command, ...args] = cmd.split(' ');
+  execFileSync(command, args, { stdio: 'inherit' })
   process.exit(0)
 }
 

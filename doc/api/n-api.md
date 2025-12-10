@@ -2286,6 +2286,13 @@ object such that no properties can be set on it, and no prototype.
 
 #### `napi_typedarray_type`
 
+<!-- YAML
+changes:
+  - version: REPLACEME
+    pr-url: https://github.com/nodejs/node/pull/58879
+    description: Added `napi_float16_array` for Float16Array support.
+-->
+
 ```c
 typedef enum {
   napi_int8_array,
@@ -2299,6 +2306,7 @@ typedef enum {
   napi_float64_array,
   napi_bigint64_array,
   napi_biguint64_array,
+  napi_float16_array,
 } napi_typedarray_type;
 ```
 
@@ -2637,6 +2645,43 @@ It is the equivalent of doing `new Object()` in JavaScript.
 The JavaScript `Object` type is described in [Section object type][] of the
 ECMAScript Language Specification.
 
+#### `napi_create_object_with_properties`
+
+<!-- YAML
+added: v25.2.0
+-->
+
+> Stability: 1 - Experimental
+
+```cpp
+napi_status napi_create_object_with_properties(napi_env env,
+                                               napi_value prototype_or_null,
+                                               const napi_value* property_names,
+                                               const napi_value* property_values,
+                                               size_t property_count,
+                                               napi_value* result)
+```
+
+* `[in] env`: The environment that the API is invoked under.
+* `[in] prototype_or_null`: The prototype object for the new object. Can be a
+  `napi_value` representing a JavaScript object to use as the prototype, a
+  `napi_value` representing JavaScript `null`, or a `nullptr` that will be converted to `null`.
+* `[in] property_names`: Array of `napi_value` representing the property names.
+* `[in] property_values`: Array of `napi_value` representing the property values.
+* `[in] property_count`: Number of properties in the arrays.
+* `[out] result`: A `napi_value` representing a JavaScript `Object`.
+
+Returns `napi_ok` if the API succeeded.
+
+This API creates a JavaScript `Object` with the specified prototype and
+properties. This is more efficient than calling `napi_create_object` followed
+by multiple `napi_set_property` calls, as it can create the object with all
+properties atomically, avoiding potential V8 map transitions.
+
+The arrays `property_names` and `property_values` must have the same length
+specified by `property_count`. The properties are added to the object in the
+order they appear in the arrays.
+
 #### `napi_create_symbol`
 
 <!-- YAML
@@ -2769,6 +2814,10 @@ exceeds the size of the `ArrayBuffer`, a `RangeError` exception is raised.
 <!-- YAML
 added: v8.3.0
 napiVersion: 1
+changes:
+  - version: REPLACEME
+    pr-url: https://github.com/nodejs/node/pull/60473
+    description: Added support for `SharedArrayBuffer`.
 -->
 
 ```c
@@ -2781,16 +2830,18 @@ napi_status napi_create_dataview(napi_env env,
 
 * `[in] env`: The environment that the API is invoked under.
 * `[in] length`: Number of elements in the `DataView`.
-* `[in] arraybuffer`: `ArrayBuffer` underlying the `DataView`.
+* `[in] arraybuffer`: `ArrayBuffer` or `SharedArrayBuffer` underlying the
+  `DataView`.
 * `[in] byte_offset`: The byte offset within the `ArrayBuffer` from which to
   start projecting the `DataView`.
 * `[out] result`: A `napi_value` representing a JavaScript `DataView`.
 
 Returns `napi_ok` if the API succeeded.
 
-This API creates a JavaScript `DataView` object over an existing `ArrayBuffer`.
-`DataView` objects provide an array-like view over an underlying data buffer,
-but one which allows items of different size and type in the `ArrayBuffer`.
+This API creates a JavaScript `DataView` object over an existing `ArrayBuffer`
+or `SharedArrayBuffer`. `DataView` objects provide an array-like view over an
+underlying data buffer, but one which allows items of different size and type in
+the `ArrayBuffer` or `SharedArrayBuffer`.
 
 It is required that `byte_length + byte_offset` is less than or equal to the
 size in bytes of the array passed in. If not, a `RangeError` exception is
@@ -3300,7 +3351,9 @@ Specification.
 added: v8.0.0
 napiVersion: 1
 changes:
-  - version: v24.9.0
+  - version:
+     - v24.9.0
+     - v22.21.0
     pr-url: https://github.com/nodejs/node/pull/59071
     description: Added support for `SharedArrayBuffer`.
 -->
@@ -4284,7 +4337,9 @@ Specification.
 ### `node_api_is_sharedarraybuffer`
 
 <!-- YAML
-added: v24.9.0
+added:
+ - v24.9.0
+ - v22.21.0
 -->
 
 > Stability: 1 - Experimental
@@ -4304,7 +4359,9 @@ This API checks if the Object passed in is a `SharedArrayBuffer`.
 ### `node_api_create_sharedarraybuffer`
 
 <!-- YAML
-added: v24.9.0
+added:
+ - v24.9.0
+ - v22.21.0
 -->
 
 > Stability: 1 - Experimental
@@ -5985,7 +6042,7 @@ the runtime.
 added: v8.6.0
 napiVersion: 1
 changes:
-  - version: REPLACEME
+  - version: v25.0.0
     pr-url: https://github.com/nodejs/node/pull/59828
     description: The `async_resource` object will now be held as a strong reference.
 -->

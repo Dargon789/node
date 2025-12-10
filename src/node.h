@@ -76,8 +76,7 @@
 #include "v8-platform.h"  // NOLINT(build/include_order)
 #include "node_version.h"  // NODE_MODULE_VERSION
 
-#define NAPI_EXPERIMENTAL
-#include "node_api.h"
+#include "node_api_types.h"  //  napi_addon_register_func
 
 #include <functional>
 #include <memory>
@@ -125,6 +124,7 @@
 
 // Forward-declare libuv loop
 struct uv_loop_s;
+struct napi_module;
 
 // Forward-declare these functions now to stop MSVS from becoming
 // terminally confused when it's done in node_internals.h
@@ -794,23 +794,23 @@ NODE_EXTERN v8::MaybeLocal<v8::Value> PrepareStackTraceCallback(
 // is included in the report.
 // Returns the filename of the written report.
 NODE_EXTERN std::string TriggerNodeReport(v8::Isolate* isolate,
-                                          const char* message,
-                                          const char* trigger,
-                                          const std::string& filename,
+                                          std::string_view message,
+                                          std::string_view trigger,
+                                          std::string_view filename,
                                           v8::Local<v8::Value> error);
 NODE_EXTERN std::string TriggerNodeReport(Environment* env,
-                                          const char* message,
-                                          const char* trigger,
-                                          const std::string& filename,
+                                          std::string_view message,
+                                          std::string_view trigger,
+                                          std::string_view filename,
                                           v8::Local<v8::Value> error);
 NODE_EXTERN void GetNodeReport(v8::Isolate* isolate,
-                               const char* message,
-                               const char* trigger,
+                               std::string_view message,
+                               std::string_view trigger,
                                v8::Local<v8::Value> error,
                                std::ostream& out);
 NODE_EXTERN void GetNodeReport(Environment* env,
-                               const char* message,
-                               const char* trigger,
+                               std::string_view message,
+                               std::string_view trigger,
                                v8::Local<v8::Value> error,
                                std::ostream& out);
 
@@ -1001,7 +1001,7 @@ NODE_DEPRECATED("Use v8::Date::ValueOf() directly",
 
 #define NODE_DEFINE_CONSTANT(target, constant)                                 \
   do {                                                                         \
-    v8::Isolate* isolate = target->GetIsolate();                               \
+    v8::Isolate* isolate = v8::Isolate::GetCurrent();                          \
     v8::Local<v8::Context> context = isolate->GetCurrentContext();             \
     v8::Local<v8::String> constant_name = v8::String::NewFromUtf8Literal(      \
         isolate, #constant, v8::NewStringType::kInternalized);                 \
@@ -1017,7 +1017,7 @@ NODE_DEPRECATED("Use v8::Date::ValueOf() directly",
 
 #define NODE_DEFINE_HIDDEN_CONSTANT(target, constant)                          \
   do {                                                                         \
-    v8::Isolate* isolate = target->GetIsolate();                               \
+    v8::Isolate* isolate = v8::Isolate::GetCurrent();                          \
     v8::Local<v8::Context> context = isolate->GetCurrentContext();             \
     v8::Local<v8::String> constant_name = v8::String::NewFromUtf8Literal(      \
         isolate, #constant, v8::NewStringType::kInternalized);                 \
@@ -1402,6 +1402,10 @@ NODE_EXTERN async_context EmitAsyncInit(v8::Isolate* isolate,
                                         v8::Local<v8::Object> resource,
                                         const char* name,
                                         async_id trigger_async_id = -1);
+NODE_EXTERN async_context EmitAsyncInit(v8::Isolate* isolate,
+                                        v8::Local<v8::Object> resource,
+                                        std::string_view name,
+                                        async_id trigger_async_id = -1);
 
 NODE_EXTERN async_context EmitAsyncInit(v8::Isolate* isolate,
                                         v8::Local<v8::Object> resource,
@@ -1458,7 +1462,7 @@ class NODE_EXTERN CallbackScope {
   CallbackScope(CallbackScope&&) = delete;
 
  private:
-  void* resource_storage_global_;
+  [[maybe_unused]] void* reserved_;
   union {
     v8::Local<v8::Object> local;
     v8::Global<v8::Object>* global_ptr;
@@ -1507,6 +1511,10 @@ class NODE_EXTERN AsyncResource {
   AsyncResource(v8::Isolate* isolate,
                 v8::Local<v8::Object> resource,
                 const char* name,
+                async_id trigger_async_id = -1);
+  AsyncResource(v8::Isolate* isolate,
+                v8::Local<v8::Object> resource,
+                std::string_view name,
                 async_id trigger_async_id = -1);
 
   virtual ~AsyncResource();
@@ -1565,10 +1573,11 @@ void RegisterSignalHandler(int signal,
 // objects on Node.js versions without v8::Object::Wrap(). Addons created to
 // work with only Node.js versions with v8::Object::Wrap() should use that
 // instead.
-NODE_DEPRECATED("Use v8::Object::Wrap()",
-                NODE_EXTERN void SetCppgcReference(v8::Isolate* isolate,
-                                                   v8::Local<v8::Object> object,
-                                                   void* wrappable));
+NODE_DEPRECATED(
+    "Use v8::Object::Wrap()",
+    NODE_EXTERN void SetCppgcReference(v8::Isolate* isolate,
+                                       v8::Local<v8::Object> object,
+                                       v8::Object::Wrappable* wrappable));
 
 }  // namespace node
 

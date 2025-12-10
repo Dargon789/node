@@ -150,6 +150,8 @@ void AsyncHooks::push_async_context(
 
   // When this call comes from JS (as a way of increasing the stack size),
   // `resource` will be empty, because JS caches these values anyway.
+  // False positive: https://github.com/cpplint/cpplint/issues/410
+  // NOLINTNEXTLINE(whitespace/newline)
   if (std::visit([](auto* ptr) { return ptr != nullptr; }, resource)) {
     native_execution_async_resources_.resize(offset + 1);
     // Caveat: This is a v8::Local<>* assignment, we do not keep a v8::Global<>!
@@ -617,7 +619,7 @@ IsolateData::~IsolateData() {}
 // Deprecated API, embedders should use v8::Object::Wrap() directly instead.
 void SetCppgcReference(Isolate* isolate,
                        Local<Object> object,
-                       void* wrappable) {
+                       v8::Object::Wrappable* wrappable) {
   v8::Object::Wrap<v8::CppHeapPointerTag::kDefaultTag>(
       isolate, object, wrappable);
 }
@@ -674,12 +676,16 @@ void Environment::AssignToContext(Local<v8::Context> context,
                                   Realm* realm,
                                   const ContextInfo& info) {
   context->SetAlignedPointerInEmbedderData(ContextEmbedderIndex::kEnvironment,
-                                           this);
-  context->SetAlignedPointerInEmbedderData(ContextEmbedderIndex::kRealm, realm);
+                                           this,
+                                           EmbedderDataTag::kPerContextData);
+  context->SetAlignedPointerInEmbedderData(
+      ContextEmbedderIndex::kRealm, realm, EmbedderDataTag::kPerContextData);
 
   // ContextifyContexts will update this to a pointer to the native object.
   context->SetAlignedPointerInEmbedderData(
-      ContextEmbedderIndex::kContextifyContext, nullptr);
+      ContextEmbedderIndex::kContextifyContext,
+      nullptr,
+      EmbedderDataTag::kPerContextData);
 
   // This must not be done before other context fields are initialized.
   ContextEmbedderTag::TagNodeContext(context);
@@ -695,11 +701,15 @@ void Environment::AssignToContext(Local<v8::Context> context,
 void Environment::UnassignFromContext(Local<v8::Context> context) {
   if (!context.IsEmpty()) {
     context->SetAlignedPointerInEmbedderData(ContextEmbedderIndex::kEnvironment,
-                                             nullptr);
+                                             nullptr,
+                                             EmbedderDataTag::kPerContextData);
     context->SetAlignedPointerInEmbedderData(ContextEmbedderIndex::kRealm,
-                                             nullptr);
+                                             nullptr,
+                                             EmbedderDataTag::kPerContextData);
     context->SetAlignedPointerInEmbedderData(
-        ContextEmbedderIndex::kContextifyContext, nullptr);
+        ContextEmbedderIndex::kContextifyContext,
+        nullptr,
+        EmbedderDataTag::kPerContextData);
   }
   UntrackContext(context);
 }
@@ -1775,10 +1785,10 @@ void AsyncHooks::Deserialize(Local<Context> context) {
         context->GetDataFromSnapshotOnce<Array>(
             info_->js_execution_async_resources).ToLocalChecked();
   } else {
-    js_execution_async_resources = Array::New(context->GetIsolate());
+    js_execution_async_resources = Array::New(Isolate::GetCurrent());
   }
-  js_execution_async_resources_.Reset(
-      context->GetIsolate(), js_execution_async_resources);
+  js_execution_async_resources_.Reset(Isolate::GetCurrent(),
+                                      js_execution_async_resources);
 
   // The native_execution_async_resources_ field requires v8::Local<> instances
   // for async calls whose resources were on the stack as JS objects when they
@@ -1818,7 +1828,7 @@ AsyncHooks::SerializeInfo AsyncHooks::Serialize(Local<Context> context,
   info.async_id_fields = async_id_fields_.Serialize(context, creator);
   if (!js_execution_async_resources_.IsEmpty()) {
     info.js_execution_async_resources = creator->AddData(
-        context, js_execution_async_resources_.Get(context->GetIsolate()));
+        context, js_execution_async_resources_.Get(Isolate::GetCurrent()));
     CHECK_NE(info.js_execution_async_resources, 0);
   } else {
     info.js_execution_async_resources = 0;

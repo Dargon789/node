@@ -1329,6 +1329,19 @@ changes:
 This function ensures the correct decodings of percent-encoded characters as
 well as ensuring a cross-platform valid absolute path string.
 
+**Security Considerations:**
+
+This function decodes percent-encoded characters, including encoded dot-segments
+(`%2e` as `.` and `%2e%2e` as `..`), and then normalizes the resulting path.
+This means that encoded directory traversal sequences (such as `%2e%2e`) are
+decoded and processed as actual path traversal, even though encoded slashes
+(`%2F`, `%5C`) are correctly rejected.
+
+**Applications must not rely on `fileURLToPath()` alone to prevent directory
+traversal attacks.** Always perform explicit path validation and security checks
+on the returned path value to ensure it remains within expected boundaries
+before using it for file system operations.
+
 ```mjs
 import { fileURLToPath } from 'node:url';
 
@@ -1383,6 +1396,15 @@ Like `url.fileURLToPath(...)` except that instead of returning a string
 representation of the path, a `Buffer` is returned. This conversion is
 helpful when the input URL contains percent-encoded segments that are
 not valid UTF-8 / Unicode sequences.
+
+**Security Considerations:**
+
+This function has the same security considerations as [`url.fileURLToPath()`][].
+It decodes percent-encoded characters, including encoded dot-segments
+(`%2e` as `.` and `%2e%2e` as `..`), and normalizes the path. **Applications
+must not rely on this function alone to prevent directory traversal attacks.**
+Always perform explicit path validation on the returned buffer value before
+using it for file system operations.
 
 ### `url.format(URL[, options])`
 
@@ -1794,6 +1816,12 @@ The formatting process operates as follows:
   string, an [`Error`][] is thrown.
 * `result` is returned.
 
+An automated migration is available ([source](https://github.com/nodejs/userland-migrations/tree/main/recipes/node-url-to-whatwg-url)).
+
+```bash
+npx codemod@latest @nodejs/node-url-to-whatwg-url
+```
+
 ### `url.parse(urlString[, parseQueryString[, slashesDenoteHost]])`
 
 <!-- YAML
@@ -1853,7 +1881,7 @@ input. CVEs are not issued for `url.parse()` vulnerabilities. Use the
 function getURL(req) {
   const proto = req.headers['x-forwarded-proto'] || 'https';
   const host = req.headers['x-forwarded-host'] || req.headers.host || 'example.com';
-  return new URL(req.url || '/', `${proto}://${host}`);
+  return new URL(`${proto}://${host}${req.url || '/'}`);
 }
 ```
 
@@ -1863,8 +1891,14 @@ use the example below:
 
 ```js
 function getURL(req) {
-  return new URL(req.url || '/', 'https://example.com');
+  return new URL(`https://example.com${req.url || '/'}`);
 }
+```
+
+An automated migration is available ([source](https://github.com/nodejs/userland-migrations/tree/main/recipes/node-url-to-whatwg-url)).
+
+```bash
+npx codemod@latest @nodejs/node-url-to-whatwg-url
 ```
 
 ### `url.resolve(from, to)`
@@ -2002,6 +2036,7 @@ console.log(myURL.origin);
 [`querystring`]: querystring.md
 [`url.domainToASCII()`]: #urldomaintoasciidomain
 [`url.domainToUnicode()`]: #urldomaintounicodedomain
+[`url.fileURLToPath()`]: #urlfileurltopathurl-options
 [`url.format()`]: #urlformaturlobject
 [`url.href`]: #urlhref
 [`url.parse()`]: #urlparseurlstring-parsequerystring-slashesdenotehost

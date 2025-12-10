@@ -109,6 +109,14 @@ export default [
           selector: 'CallExpression[callee.property.name="catch"]>:first-child:matches(CallExpression[callee.object.name="common"][callee.property.name="mustNotCall"], CallExpression[callee.name="mustNotCall"])',
           message: 'Calling `.catch(common.mustNotCall())` will not detect never-settling promises. Use `.then(common.mustCall())` instead.',
         },
+        {
+          selector: 'CallExpression:matches([callee.type="Identifier"][callee.name="assert"], [callee.type="MemberExpression"][callee.object.type="Identifier"][callee.object.name="assert"][callee.property.type="Identifier"][callee.property.name="ok"])[arguments.0.type="CallExpression"][arguments.0.callee.type="MemberExpression"][arguments.0.callee.object.regex][arguments.0.callee.property.type="Identifier"][arguments.0.callee.property.name="test"]',
+          message: 'Use assert.match instead',
+        },
+        {
+          selector: 'CallExpression:matches([callee.type="Identifier"][callee.name="assert"], [callee.type="MemberExpression"][callee.object.type="Identifier"][callee.object.name="assert"][callee.property.type="Identifier"][callee.property.name="ok"])[arguments.0.type="UnaryExpression"][arguments.0.operator="!"][arguments.0.argument.type="CallExpression"][arguments.0.argument.callee.type="MemberExpression"][arguments.0.argument.callee.object.regex][arguments.0.argument.callee.property.name="test"]',
+          message: 'Use assert.doesNotMatch instead',
+        },
       ],
 
       // Stylistic rules.
@@ -133,13 +141,12 @@ export default [
       ],
       'node-core/require-common-first': 'error',
       'node-core/no-duplicate-requires': 'off',
+      'node-core/must-call-assert': 'error',
     },
   },
   {
     files: [
-      'test/es-module/**/*.{js,mjs}',
       'test/parallel/**/*.{js,mjs}',
-      'test/sequential/**/*.{js,mjs}',
     ],
     rules: {
       '@stylistic/js/comma-dangle': [
@@ -156,12 +163,31 @@ export default [
   },
   {
     files: [
+      'test/es-module/**/*.{js,mjs}',
+      'test/sequential/**/*.{js,mjs}',
+    ],
+    rules: {
+      '@stylistic/js/comma-dangle': [
+        'error',
+        {
+          arrays: 'always-multiline',
+          exports: 'always-multiline',
+          functions: 'only-multiline',
+          imports: 'always-multiline',
+          objects: 'always-multiline',
+        },
+      ],
+    },
+  },
+  {
+    files: [
       'test/{common,fixtures,wpt}/**/*.{js,mjs,cjs}',
       'test/eslint.config_partial.mjs',
     ],
     rules: {
       'node-core/required-modules': 'off',
       'node-core/require-common-first': 'off',
+      'node-core/must-call-assert': 'off',
     },
   },
   {

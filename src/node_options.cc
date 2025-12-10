@@ -128,7 +128,15 @@ void PerIsolateOptions::HandleMaxOldSpaceSizePercentage(
   }
 
   // Get available memory in bytes
+#ifdef V8_COMPRESS_POINTERS
+  // When pointer compression is enabled, V8 uses a 4 GiB heap limit.
+  // We'll use the smaller of that or the total system memory as
+  // reported by uv.
+  uint64_t total_memory =
+      std::min(uv_get_total_memory(), kMaxPointerCompressionHeap);  // 4 GiB
+#else
   uint64_t total_memory = uv_get_total_memory();
+#endif
   uint64_t constrained_memory = uv_get_constrained_memory();
 
   // Use constrained memory if available, otherwise use total memory
@@ -242,7 +250,7 @@ void EnvironmentOptions::CheckOptions(std::vector<std::string>* errors,
     } else if (test_runner_force_exit) {
       errors->push_back("either --watch or --test-force-exit "
                         "can be used, not both");
-    } else if (!test_runner && (argv->size() < 1 || (*argv)[1].empty())) {
+    } else if (!test_runner && watch_mode_paths.empty() && argv->size() < 1) {
       errors->push_back("--watch requires specifying a file");
     }
 
@@ -479,17 +487,23 @@ EnvironmentOptionsParser::EnvironmentOptionsParser() {
             kAllowedInEnvvar,
             true);
   AddOption("--experimental-print-required-tla",
-            "Print pending top-level await. If --experimental-require-module "
+            "Print pending top-level await. If --require-module "
             "is true, evaluate asynchronous graphs loaded by `require()` but "
             "do not run the microtasks, in order to to find and print "
             "top-level await in the graph",
             &EnvironmentOptions::print_required_tla,
             kAllowedInEnvvar);
-  AddOption("--experimental-require-module",
+  AddOption("--require-module",
             "Allow loading synchronous ES Modules in require().",
             &EnvironmentOptions::require_module,
             kAllowedInEnvvar,
             true);
+  AddOption("--experimental-require-module",
+            "Legacy alias for --require-module",
+            &EnvironmentOptions::require_module,
+            kAllowedInEnvvar,
+            true);
+  Implies("--experimental-require-module", "--require-module");
   AddOption("--diagnostic-dir",
             "set dir for all output files"
             " (default: current working directory)",
@@ -559,12 +573,12 @@ EnvironmentOptionsParser::EnvironmentOptionsParser() {
             NoOp{},
 #endif
             kAllowedInEnvvar);
-  AddOption("--webstorage",
-            "Web Storage API",
+  AddOption("--experimental-webstorage",
+            "experimental Web Storage API",
             &EnvironmentOptions::webstorage,
             kAllowedInEnvvar,
             true);
-  AddAlias("--experimental-webstorage", "--webstorage");
+  AddAlias("--webstorage", "--experimental-webstorage");
   AddOption("--localstorage-file",
             "file used to persist localStorage data",
             &EnvironmentOptions::localstorage_file,
@@ -591,39 +605,54 @@ EnvironmentOptionsParser::EnvironmentOptionsParser() {
             "enable the permission system",
             &EnvironmentOptions::permission,
             kAllowedInEnvvar,
-            false);
+            false,
+            OptionNamespaces::kPermissionNamespace);
   AddOption("--allow-fs-read",
             "allow permissions to read the filesystem",
             &EnvironmentOptions::allow_fs_read,
-            kAllowedInEnvvar);
+            kAllowedInEnvvar,
+            OptionNamespaces::kPermissionNamespace);
   AddOption("--allow-fs-write",
             "allow permissions to write in the filesystem",
             &EnvironmentOptions::allow_fs_write,
-            kAllowedInEnvvar);
+            kAllowedInEnvvar,
+            OptionNamespaces::kPermissionNamespace);
   AddOption("--allow-addons",
             "allow use of addons when any permissions are set",
             &EnvironmentOptions::allow_addons,
-            kAllowedInEnvvar);
+            kAllowedInEnvvar,
+            false,
+            OptionNamespaces::kPermissionNamespace);
   AddOption("--allow-child-process",
             "allow use of child process when any permissions are set",
             &EnvironmentOptions::allow_child_process,
-            kAllowedInEnvvar);
+            kAllowedInEnvvar,
+            false,
+            OptionNamespaces::kPermissionNamespace);
   AddOption("--allow-inspector",
             "allow use of inspector when any permissions are set",
             &EnvironmentOptions::allow_inspector,
-            kAllowedInEnvvar);
+            kAllowedInEnvvar,
+            false,
+            OptionNamespaces::kPermissionNamespace);
   AddOption("--allow-net",
             "allow use of network when any permissions are set",
             &EnvironmentOptions::allow_net,
-            kAllowedInEnvvar);
+            kAllowedInEnvvar,
+            false,
+            OptionNamespaces::kPermissionNamespace);
   AddOption("--allow-wasi",
             "allow wasi when any permissions are set",
             &EnvironmentOptions::allow_wasi,
-            kAllowedInEnvvar);
+            kAllowedInEnvvar,
+            false,
+            OptionNamespaces::kPermissionNamespace);
   AddOption("--allow-worker",
             "allow worker threads when any permissions are set",
             &EnvironmentOptions::allow_worker_threads,
-            kAllowedInEnvvar);
+            kAllowedInEnvvar,
+            false,
+            OptionNamespaces::kPermissionNamespace);
   AddOption("--experimental-repl-await",
             "experimental await keyword support in REPL",
             &EnvironmentOptions::experimental_repl_await,
@@ -817,7 +846,9 @@ EnvironmentOptionsParser::EnvironmentOptionsParser() {
   AddOption("--test",
             "launch test runner on startup",
             &EnvironmentOptions::test_runner,
-            kDisallowedInEnvvar);
+            kDisallowedInEnvvar,
+            false,
+            OptionNamespaces::kTestRunnerNamespace);
   AddOption("--test-concurrency",
             "specify test runner concurrency",
             &EnvironmentOptions::test_runner_concurrency,
@@ -1013,20 +1044,26 @@ EnvironmentOptionsParser::EnvironmentOptionsParser() {
   AddOption("--watch",
             "run in watch mode",
             &EnvironmentOptions::watch_mode,
-            kAllowedInEnvvar);
+            kAllowedInEnvvar,
+            false,
+            OptionNamespaces::kWatchNamespace);
   AddOption("--watch-path",
             "path to watch",
             &EnvironmentOptions::watch_mode_paths,
-            kAllowedInEnvvar);
+            kAllowedInEnvvar,
+            OptionNamespaces::kWatchNamespace);
   AddOption("--watch-kill-signal",
             "kill signal to send to the process on watch mode restarts"
             "(default: SIGTERM)",
             &EnvironmentOptions::watch_mode_kill_signal,
-            kAllowedInEnvvar);
+            kAllowedInEnvvar,
+            OptionNamespaces::kWatchNamespace);
   AddOption("--watch-preserve-output",
             "preserve outputs on watch mode restart",
             &EnvironmentOptions::watch_mode_preserve_output,
-            kAllowedInEnvvar);
+            kAllowedInEnvvar,
+            false,
+            OptionNamespaces::kWatchNamespace);
   Implies("--watch-path", "--watch");
   AddOption("--check",
             "syntax check script without executing",
@@ -1057,17 +1094,18 @@ EnvironmentOptionsParser::EnvironmentOptionsParser() {
             "ES module to preload (option can be repeated)",
             &EnvironmentOptions::preload_esm_modules,
             kAllowedInEnvvar);
-  AddOption("--experimental-strip-types",
-            "Experimental type-stripping for TypeScript files.",
-            &EnvironmentOptions::experimental_strip_types,
+  AddOption("--strip-types",
+            "Type-stripping for TypeScript files.",
+            &EnvironmentOptions::strip_types,
             kAllowedInEnvvar,
-            true);
+            HAVE_AMARO);
+  AddAlias("--experimental-strip-types", "--strip-types");
   AddOption("--experimental-transform-types",
             "enable transformation of TypeScript-only"
             "syntax into JavaScript code",
             &EnvironmentOptions::experimental_transform_types,
             kAllowedInEnvvar);
-  Implies("--experimental-transform-types", "--experimental-strip-types");
+  Implies("--experimental-transform-types", "--strip-types");
   Implies("--experimental-transform-types", "--enable-source-maps");
   AddOption("--interactive",
             "always enter the REPL even if stdin does not appear "

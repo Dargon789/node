@@ -78,10 +78,16 @@ EXEEXT := $(shell $(PYTHON) -c \
 		"import sys; print('.exe' if sys.platform == 'win32' else '')")
 
 NODE_EXE = node$(EXEEXT)
-# Use $(PWD) so we can cd to anywhere before calling this
-NODE ?= "$(PWD)/$(NODE_EXE)"
 NODE_G_EXE = node_g$(EXEEXT)
 NPM ?= ./deps/npm/bin/npm-cli.js
+
+# Release build of node.
+# Use $(PWD) so we can cd to anywhere before calling this.
+NODE ?= "$(PWD)/$(NODE_EXE)"
+# Prefer $(OUT_NODE) when running tests. Use $(NODE)
+# when generating coverage reports or running toolings as
+# debug build is be slower.
+OUT_NODE ?= "$(PWD)/out/$(BUILDTYPE)/node$(EXEEXT)"
 
 # Flags for packaging.
 BUILD_DOWNLOAD_FLAGS ?= --download=all
@@ -108,8 +114,10 @@ available-node = \
 # just the debug build, run `make -C out BUILDTYPE=Debug` instead.
 ifeq ($(BUILDTYPE),Release)
 all: $(NODE_EXE) ## Build node in out/Release/node (Default).
+$(OUT_NODE): $(NODE_EXE)
 else
 all: $(NODE_EXE) $(NODE_G_EXE)
+$(OUT_NODE): $(NODE_G_EXE)
 endif
 
 .PHONY: help
@@ -293,7 +301,7 @@ coverage-report-js: ## Report JavaScript coverage results.
 
 cctest: all ## Run the C++ tests using the built `cctest` executable.
 	@out/$(BUILDTYPE)/$@ --gtest_filter=$(GTEST_FILTER)
-	$(NODE) ./test/embedding/test-embedding.js
+	$(OUT_NODE) ./test/embedding/test-embedding.js
 
 .PHONY: list-gtests
 list-gtests: ## List all available C++ gtests.
@@ -399,7 +407,7 @@ ADDONS_HEADERS_PREREQS := tools/install.py \
 	$(wildcard deps/uv/include/*/*.h) \
 	$(wildcard deps/v8/include/*.h) \
 	$(wildcard deps/v8/include/*/*.h) \
-	deps/zlib/zconf.h deps/zlib/zlib.h \
+	$(wildcard deps/zlib/z*.h) \
 	src/node.h src/node_api.h src/js_native_api.h src/js_native_api_types.h \
 	src/node_api_types.h src/node_buffer.h src/node_object_wrap.h \
 	src/node_version.h
@@ -605,7 +613,7 @@ test-ci: | clear-stalled bench-addons-build build-addons build-js-native-api-tes
 	$(PYTHON) tools/test.py $(PARALLEL_ARGS) -p tap --logfile test.tap \
 		--mode=$(BUILDTYPE_LOWER) --flaky-tests=$(FLAKY_TESTS) \
 		$(TEST_CI_ARGS) $(CI_JS_SUITES) $(CI_NATIVE_SUITES) $(CI_DOC)
-	$(NODE) ./test/embedding/test-embedding.js
+	$(OUT_NODE) ./test/embedding/test-embedding.js
 	$(info Clean up any leftover processes, error if found.)
 	ps awwx | grep Release/node | grep -v grep | cat
 	@PS_OUT=`ps awwx | grep Release/node | grep -v grep | awk '{print $$1}'`; \
@@ -651,7 +659,7 @@ test-wpt: all ## Run the Web Platform Tests.
 test-wpt-report: ## Run the Web Platform Tests and generate a report.
 	$(RM) -r out/wpt
 	mkdir -p out/wpt
-	-WPT_REPORT=1 $(PYTHON) tools/test.py --shell $(NODE) $(PARALLEL_ARGS) wpt
+	-WPT_REPORT=1 $(PYTHON) tools/test.py --shell $(OUT_NODE) $(PARALLEL_ARGS) wpt
 	$(NODE) "$$PWD/tools/merge-wpt-reports.mjs"
 
 .PHONY: test-internet
@@ -680,12 +688,12 @@ test-known-issues: all ## Run tests for known issues.
 
 # Related CI job: node-test-npm
 .PHONY: test-npm
-test-npm: $(NODE_EXE) ## Run the npm test suite on deps/npm.
-	$(NODE) tools/test-npm-package --install --logfile=test-npm.tap deps/npm test
+test-npm: $(OUT_NODE) ## Run the npm test suite on deps/npm.
+	$(OUT_NODE) tools/test-npm-package --install --logfile=test-npm.tap deps/npm test
 
 .PHONY: test-npm-publish
-test-npm-publish: $(NODE_EXE) ## Test the `npm publish` command.
-	npm_package_config_publishtest=true $(NODE) deps/npm/test/run.js
+test-npm-publish: $(OUT_NODE) ## Test the `npm publish` command.
+	npm_package_config_publishtest=true $(OUT_NODE) deps/npm/test/run.js
 
 .PHONY: test-js-native-api
 test-js-native-api: test-build-js-native-api ## Run JS Native-API tests.
@@ -1032,6 +1040,11 @@ override DESTCPU=x86
 endif
 
 TARNAME=node-$(FULLVERSION)
+# Supply SKIP_SHARED_DEPS=1 to explicitly skip all dependencies that can be included as shared deps
+SKIP_SHARED_DEPS ?= 0
+ifeq ($(SKIP_SHARED_DEPS), 1)
+TARNAME:=$(TARNAME)-slim
+endif
 TARBALL=$(TARNAME).tar
 # Custom user-specified variation, use it directly
 ifdef VARIATION
@@ -1215,12 +1228,32 @@ $(TARBALL): release-only doc-only
 	$(RM) -r $(TARNAME)/.mailmap
 	$(RM) -r $(TARNAME)/deps/corepack
 	$(RM) $(TARNAME)/test/parallel/test-corepack-version.js
+ifeq ($(SKIP_SHARED_DEPS), 1)
+	$(RM) -r $(TARNAME)/deps/ada
+	$(RM) -r $(TARNAME)/deps/brotli
+	$(RM) -r $(TARNAME)/deps/cares
+	$(RM) -r $(TARNAME)/deps/icu-small
+	$(RM) -r $(TARNAME)/deps/icu-tmp
+	$(RM) -r $(TARNAME)/deps/llhttp
+	$(RM) -r $(TARNAME)/deps/nghttp2
+	$(RM) -r $(TARNAME)/deps/ngtcp2
+	find $(TARNAME)/deps/openssl -maxdepth 1 -type f ! -name 'nodejs-openssl.cnf' -exec $(RM) {} +
+	find $(TARNAME)/deps/openssl -mindepth 1 -maxdepth 1 -type d -exec $(RM) -r {} +
+	$(RM) -r $(TARNAME)/deps/simdjson
+	$(RM) -r $(TARNAME)/deps/sqlite
+	$(RM) -r $(TARNAME)/deps/temporal
+	$(RM) -r $(TARNAME)/deps/uv
+	$(RM) -r $(TARNAME)/deps/uvwasi
+	$(RM) -r $(TARNAME)/deps/zlib
+	$(RM) -r $(TARNAME)/deps/zstd
+else
 	$(RM) -r $(TARNAME)/deps/openssl/openssl/demos
 	$(RM) -r $(TARNAME)/deps/openssl/openssl/doc
 	$(RM) -r $(TARNAME)/deps/openssl/openssl/test
 	$(RM) -r $(TARNAME)/deps/uv/docs
 	$(RM) -r $(TARNAME)/deps/uv/samples
 	$(RM) -r $(TARNAME)/deps/uv/test
+endif
 	$(RM) -r $(TARNAME)/deps/v8/samples
 	$(RM) -r $(TARNAME)/deps/v8/tools/profviz
 	$(RM) -r $(TARNAME)/deps/v8/tools/run-tests.py
@@ -1565,8 +1598,8 @@ cpplint: lint-cpp
 # Try with '--system' if it fails without; the system may have set '--user'
 lint-py-build: ## Build resources needed to lint python files.
 	$(info Pip installing ruff on $(shell $(PYTHON) --version)...)
-	$(PYTHON) -m pip install --upgrade --target tools/pip/site-packages ruff==0.6.5 || \
-		$(PYTHON) -m pip install --upgrade --system --target tools/pip/site-packages ruff==0.6.5
+	$(PYTHON) -m pip install --upgrade --target tools/pip/site-packages ruff==0.13.1 || \
+		$(PYTHON) -m pip install --upgrade --system --target tools/pip/site-packages ruff==0.13.1
 
 .PHONY: lint-py lint-py-fix lint-py-fix-unsafe
 ifneq ("","$(wildcard tools/pip/site-packages/ruff)")
@@ -1576,7 +1609,6 @@ lint-py:
 	tools/pip/site-packages/bin/ruff check .
 lint-py-fix:
 	tools/pip/site-packages/bin/ruff check . --fix
-
 lint-py-fix-unsafe:
 	tools/pip/site-packages/bin/ruff check . --fix --unsafe-fixes
 else

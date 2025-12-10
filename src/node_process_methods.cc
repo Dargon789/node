@@ -613,7 +613,7 @@ static void LoadEnvFile(const v8::FunctionCallbackInfo<v8::Value>& args) {
     }
     case dotenv.ParseResult::InvalidContent: {
       THROW_ERR_INVALID_ARG_TYPE(
-          env, "Contents of '%s' should be a valid string.", path.c_str());
+          env, "Contents of '%s' should be a valid string.", path);
       break;
     }
     case dotenv.ParseResult::FileError: {
@@ -673,7 +673,8 @@ void BindingData::RegisterExternalReferences(
 BindingData* BindingData::FromV8Value(Local<Value> value) {
   Local<Object> v8_object = value.As<Object>();
   return static_cast<BindingData*>(
-      v8_object->GetAlignedPointerFromInternalField(BaseObject::kSlot));
+      v8_object->GetAlignedPointerFromInternalField(BaseObject::kSlot,
+                                                    EmbedderDataTag::kDefault));
 }
 
 void BindingData::MemoryInfo(MemoryTracker* tracker) const {
@@ -737,7 +738,7 @@ void BindingData::Deserialize(Local<Context> context,
                               int index,
                               InternalFieldInfoBase* info) {
   DCHECK_IS_SNAPSHOT_SLOT(index);
-  v8::HandleScope scope(context->GetIsolate());
+  v8::HandleScope scope(Isolate::GetCurrent());
   Realm* realm = Realm::GetCurrent(context);
   // Recreate the buffer in the constructor.
   InternalFieldInfo* casted_info = static_cast<InternalFieldInfo*>(info);

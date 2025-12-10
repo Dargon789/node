@@ -703,6 +703,13 @@ by the `node:assert` module.
 An attempt was made to register something that is not a function as an
 `AsyncHooks` callback.
 
+<a id="ERR_ASYNC_LOADER_REQUEST_NEVER_SETTLED"></a>
+
+### `ERR_ASYNC_LOADER_REQUEST_NEVER_SETTLED`
+
+An operation related to module loading is customized by an asynchronous loader
+hook that never settled the promise before the loader thread exits.
+
 <a id="ERR_ASYNC_TYPE"></a>
 
 ### `ERR_ASYNC_TYPE`
@@ -2654,8 +2661,6 @@ A QUIC session failed because version negotiation is required.
 
 ### `ERR_REQUIRE_ASYNC_MODULE`
 
-> Stability: 1 - Experimental
-
 When trying to `require()` a [ES Module][], the module turns out to be asynchronous.
 That is, it contains top-level await.
 
@@ -2666,8 +2671,6 @@ before looking for the top-level awaits).
 <a id="ERR_REQUIRE_CYCLE_MODULE"></a>
 
 ### `ERR_REQUIRE_CYCLE_MODULE`
-
-> Stability: 1 - Experimental
 
 When trying to `require()` a [ES Module][], a CommonJS to ESM or ESM to CommonJS edge
 participates in an immediate cycle.
@@ -4419,7 +4422,7 @@ An error occurred trying to allocate memory. This should never happen.
 [`new URLSearchParams(iterable)`]: url.md#new-urlsearchparamsiterable
 [`package.json`]: packages.md#nodejs-packagejson-field-definitions
 [`postMessage()`]: worker_threads.md#portpostmessagevalue-transferlist
-[`postMessageToThread()`]: worker_threads.md#workerpostmessagetothreadthreadid-value-transferlist-timeout
+[`postMessageToThread()`]: worker_threads.md#worker_threadspostmessagetothreadthreadid-value-transferlist-timeout
 [`process.on('exit')`]: process.md#event-exit
 [`process.send()`]: process.md#processsendmessage-sendhandle-options-callback
 [`process.setUncaughtExceptionCaptureCallback()`]: process.md#processsetuncaughtexceptioncapturecallbackfn

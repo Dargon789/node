@@ -270,7 +270,9 @@ Examples can be found in the [File System Permissions][] documentation.
 ### `--allow-inspector`
 
 <!-- YAML
-added: v25.0.0
+added:
+  - v25.0.0
+  - v24.12.0
 -->
 
 > Stability: 1.0 - Early development
@@ -399,13 +401,31 @@ Error: Access to this API has been restricted
 }
 ```
 
+### `--build-sea=config`
+
+<!-- YAML
+added:
+  - v25.5.0
+-->
+
+> Stability: 1.1 - Active development
+
+Generates a [single executable application][] from a JSON
+configuration file. The argument must be a path to the configuration file. If
+the path is not absolute, it is resolved relative to the current working
+directory.
+
+For configuration fields, cross-platform notes, and asset APIs, see
+the [single executable application][] documentation.
+
 ### `--build-snapshot`
 
 <!-- YAML
 added: v18.8.0
 changes:
   - version:
-    - REPLACEME
+    - v25.4.0
+    - v24.13.1
     pr-url: https://github.com/nodejs/node/pull/60954
     description: The snapshot building process is no longer experimental.
 -->
@@ -473,7 +493,8 @@ added:
   - v20.12.0
 changes:
   - version:
-    - REPLACEME
+    - v25.4.0
+    - v24.13.1
     pr-url: https://github.com/nodejs/node/pull/60954
     description: The snapshot building process is no longer experimental.
 -->
@@ -737,7 +758,7 @@ added:
 
 By default, Node.js enables trap-handler-based WebAssembly bound
 checks. As a result, V8 does not need to insert inline bound checks
-int the code compiled from WebAssembly which may speedup WebAssembly
+in the code compiled from WebAssembly which may speed up WebAssembly
 execution significantly, but this optimization requires allocating
 a big virtual memory cage (currently 10GB). If the Node.js process
 does not have access to a large enough virtual memory address space
@@ -813,15 +834,6 @@ added: v6.0.0
 
 Enable FIPS-compliant crypto at startup. (Requires Node.js to be built
 against FIPS-compatible OpenSSL.)
-
-### `--enable-network-family-autoselection`
-
-<!-- YAML
-added: v18.18.0
--->
-
-Enables the family autoselection algorithm unless connection options explicitly
-disables it.
 
 ### `--enable-source-maps`
 
@@ -984,6 +996,9 @@ changes:
 
 Evaluate the following argument as JavaScript. The modules which are
 predefined in the REPL can also be used in `script`.
+
+If `script` starts with `-`, pass it using `=` (for example,
+`node --print --eval=-42`) so it is parsed as the value of `--eval`.
 
 On Windows, using `cmd.exe` a single quote will not work correctly because it
 only recognizes double `"` for quoting. In Powershell or Git bash, both `'`
@@ -1188,9 +1203,9 @@ changes:
 
 > This flag is discouraged and may be removed in a future version of Node.js.
 > Please use
-> [`--import` with `register()`][module customization hooks: enabling] instead.
+> [`--import` with `register()`][preloading asynchronous module customization hooks] instead.
 
-Specify the `module` containing exported [module customization hooks][].
+Specify the `module` containing exported [asynchronous module customization hooks][].
 `module` may be any string accepted as an [`import` specifier][].
 
 This feature requires `--allow-worker` if used with the [Permission Model][].
@@ -1251,6 +1266,17 @@ added:
 
 Use this flag to enable [ShadowRealm][] support.
 
+### `--experimental-storage-inspection`
+
+<!-- YAML
+added:
+  - v25.5.0
+-->
+
+> Stability: 1.1 - Active Development
+
+Enable experimental support for storage inspection
+
 ### `--experimental-test-coverage`
 
 <!-- YAML
@@ -1291,17 +1317,6 @@ changes:
 Enable module mocking in the test runner.
 
 This feature requires `--allow-worker` if used with the [Permission Model][].
-
-### `--experimental-transform-types`
-
-<!-- YAML
-added: v22.7.0
--->
-
-> Stability: 1.2 - Release candidate
-
-Enables the transformation of TypeScript-only syntax into JavaScript code.
-Implies `--enable-source-maps`.
 
 ### `--experimental-vm-modules`
 
@@ -1493,7 +1508,9 @@ added:
   - v14.18.0
 changes:
   - version:
-    - REPLACEME
+    - v25.4.0
+    - v24.13.1
+    - v22.22.1
     pr-url: https://github.com/nodejs/node/pull/60956
     description: The flag is no longer experimental.
 -->
@@ -1663,26 +1680,6 @@ When enabled, the parser will accept the following:
 All the above will expose your application to request smuggling
 or poisoning attack. Avoid using this option.
 
-<!-- Anchor to make sure old links find a target -->
-
-<a id="inspector_security"></a>
-
-#### Warning: binding inspector to a public IP:port combination is insecure
-
-Binding the inspector to a public IP (including `0.0.0.0`) with an open port is
-insecure, as it allows external hosts to connect to the inspector and perform
-a [remote code execution][] attack.
-
-If specifying a host, make sure that either:
-
-* The host is not accessible from public networks.
-* A firewall disallows unwanted connections on the port.
-
-**More specifically, `--inspect=0.0.0.0` is insecure if the port (`9229` by
-default) is not firewall-protected.**
-
-See the [debugging security implications][] section for more information.
-
 ### `--inspect-brk[=[host:]port]`
 
 <!-- YAML
@@ -1694,6 +1691,9 @@ Default `host:port` is `127.0.0.1:9229`. If port `0` is specified,
 a random available port will be used.
 
 See [V8 Inspector integration for Node.js][] for further explanation on Node.js debugger.
+
+See the [security warning][] below regarding the `host`
+parameter usage.
 
 ### `--inspect-port=[host:]port`
 
@@ -1732,6 +1732,9 @@ a random available port will be used.
 
 See [V8 Inspector integration for Node.js][] for further explanation on Node.js debugger.
 
+See the [security warning][] below regarding the `host`
+parameter usage.
+
 ### `--inspect[=[host:]port]`
 
 <!-- YAML
@@ -1745,6 +1748,26 @@ V8 inspector integration allows tools such as Chrome DevTools and IDEs to debug
 and profile Node.js instances. The tools attach to Node.js instances via a
 tcp port and communicate using the [Chrome DevTools Protocol][].
 See [V8 Inspector integration for Node.js][] for further explanation on Node.js debugger.
+
+<!-- Anchor to make sure old links find a target -->
+
+<a id="inspector_security"></a>
+
+#### Warning: binding inspector to a public IP:port combination is insecure
+
+Binding the inspector to a public IP (including `0.0.0.0`) with an open port is
+insecure, as it allows external hosts to connect to the inspector and perform
+a [remote code execution][] attack.
+
+If specifying a host, make sure that either:
+
+* The host is not accessible from public networks.
+* A firewall disallows unwanted connections on the port.
+
+**More specifically, `--inspect=0.0.0.0` is insecure if the port (`9229` by
+default) is not firewall-protected.**
+
+See the [debugging security implications][] section for more information.
 
 ### `-i`, `--interactive`
 
@@ -1904,7 +1927,7 @@ added:
   - v20.17.0
 changes:
   - version:
-    - REPLACEME
+    - v25.4.0
     pr-url: https://github.com/nodejs/node/pull/60959
     description: The flag was renamed from `--no-experimental-require-module` to
                  `--no-require-module`, with the former marked as legacy.
@@ -2007,11 +2030,11 @@ added:
   - v20.17.0
 changes:
   - version:
-    - REPLACEME
+    - v25.4.0
     pr-url: https://github.com/nodejs/node/pull/60959
     description: This flag is no longer experimental.
   - version:
-    - REPLACEME
+    - v25.4.0
     pr-url: https://github.com/nodejs/node/pull/60959
     description: This flag was renamed from `--no-experimental-require-module`
                  to `--no-require-module`.
@@ -2032,7 +2055,9 @@ See [Loading ECMAScript modules using `require()`][].
 <!-- YAML
 added: v22.6.0
 changes:
-  - version: v25.2.0
+  - version:
+      - v25.2.0
+      - v24.12.0
     pr-url: https://github.com/nodejs/node/pull/60600
     description: Type stripping is now stable, the flag was renamed from
                  `--no-experimental-strip-types` to `--no-strip-types`.
@@ -2141,6 +2166,16 @@ following permissions are restricted:
 * Worker Threads - manageable through [`--allow-worker`][] flag
 * WASI - manageable through [`--allow-wasi`][] flag
 * Addons - manageable through [`--allow-addons`][] flag
+
+### `--permission-audit`
+
+<!-- YAML
+added: v25.8.0
+-->
+
+Enable audit only for the permission model. When enabled, permission checks
+are performed but access is not denied. Instead, a warning is emitted for
+each permission violation via diagnostics channel.
 
 ### `--preserve-symlinks`
 
@@ -2262,7 +2297,7 @@ Write reports in a compact format, single-line JSON, more easily consumable
 by log processing systems than the default multi-line format designed for
 human consumption.
 
-### `--report-dir=directory`, `report-directory=directory`
+### `--report-dir=directory`, `--report-directory=directory`
 
 <!-- YAML
 added: v11.8.0
@@ -3416,7 +3451,7 @@ Any other value will result in colorized output being disabled.
 <!-- YAML
 added: v22.1.0
 changes:
-  - version: REPLACEME
+  - version: v25.4.0
     pr-url: https://github.com/nodejs/node/pull/60971
     description: This feature is no longer experimental.
 -->
@@ -3579,7 +3614,6 @@ one is included in the list below.
 * `--experimental-specifier-resolution`
 * `--experimental-test-isolation`
 * `--experimental-top-level-await`
-* `--experimental-transform-types`
 * `--experimental-vm-modules`
 * `--experimental-wasi-unstable-preview1`
 * `--force-context-aware`
@@ -3628,6 +3662,7 @@ one is included in the list below.
 * `--openssl-legacy-provider`
 * `--openssl-shared-config`
 * `--pending-deprecation`
+* `--permission-audit`
 * `--permission`
 * `--preserve-symlinks-main`
 * `--preserve-symlinks`
@@ -3711,6 +3746,7 @@ V8 options that are allowed are:
 * `--expose-gc`
 * `--interpreted-frames-native-stack`
 * `--jitless`
+* `--max-heap-size`
 * `--max-old-space-size`
 * `--max-semi-space-size`
 * `--perf-basic-prof-only-functions`
@@ -4038,7 +4074,7 @@ that run in libuv's threadpool will experience degraded performance. In order to
 mitigate this issue, one potential solution is to increase the size of libuv's
 threadpool by setting the `'UV_THREADPOOL_SIZE'` environment variable to a value
 greater than `4` (its current default value). However, setting this from inside
-the process using `process.env.UV_THREADPOOL_SIZE=size` is not guranteed to work
+the process using `process.env.UV_THREADPOOL_SIZE=size` is not guaranteed to work
 as the threadpool would have been created as part of the runtime initialisation
 much before user code is run. For more information, see the [libuv threadpool documentation][].
 
@@ -4070,6 +4106,12 @@ documented here:
 ### `--interpreted-frames-native-stack`
 
 ### `--jitless`
+
+### `--max-heap-size`
+
+Specifies the maximum heap size (in megabytes) for the process.
+
+This option is typically used to limit the amount of memory the process can use for its JavaScript heap.
 
 <!-- Anchor to make sure old links find a target -->
 
@@ -4154,8 +4196,6 @@ node --stack-trace-limit=12 -p -e "Error.stackTraceLimit" # prints 12
 [ExperimentalWarning: `vm.measureMemory` is an experimental feature]: vm.md#vmmeasurememoryoptions
 [File System Permissions]: permissions.md#file-system-permissions
 [Loading ECMAScript modules using `require()`]: modules.md#loading-ecmascript-modules-using-require
-[Module customization hooks]: module.md#customization-hooks
-[Module customization hooks: enabling]: module.md#enabling
 [Module resolution and loading]: packages.md#module-resolution-and-loading
 [Navigator API]: globals.md#navigator
 [Node.js issue tracker]: https://github.com/nodejs/node/issues
@@ -4182,7 +4222,7 @@ node --stack-trace-limit=12 -p -e "Error.stackTraceLimit" # prints 12
 [`--disable-sigusr1`]: #--disable-sigusr1
 [`--env-file-if-exists`]: #--env-file-if-existsfile
 [`--env-file`]: #--env-filefile
-[`--experimental-sea-config`]: single-executable-applications.md#generating-single-executable-preparation-blobs
+[`--experimental-sea-config`]: single-executable-applications.md#1-generating-single-executable-preparation-blobs
 [`--heap-prof-dir`]: #--heap-prof-dir
 [`--import`]: #--importmodule
 [`--no-require-module`]: #--no-require-module
@@ -4218,6 +4258,7 @@ node --stack-trace-limit=12 -p -e "Error.stackTraceLimit" # prints 12
 [`v8.startupSnapshot.addDeserializeCallback()`]: v8.md#v8startupsnapshotadddeserializecallbackcallback-data
 [`v8.startupSnapshot.setDeserializeMainFunction()`]: v8.md#v8startupsnapshotsetdeserializemainfunctioncallback-data
 [`v8.startupSnapshot` API]: v8.md#startup-snapshot-api
+[asynchronous module customization hooks]: module.md#asynchronous-customization-hooks
 [captured by the built-in snapshot of Node.js]: https://github.com/nodejs/node/blob/b19525a33cc84033af4addd0f80acd4dc33ce0cf/test/parallel/test-bootstrap-modules.js#L24
 [collecting code coverage from tests]: test.md#collecting-code-coverage
 [conditional exports]: packages.md#conditional-exports
@@ -4232,6 +4273,7 @@ node --stack-trace-limit=12 -p -e "Error.stackTraceLimit" # prints 12
 [jitless]: https://v8.dev/blog/jitless
 [libuv threadpool documentation]: https://docs.libuv.org/en/latest/threadpool.html
 [module compile cache]: module.md#module-compile-cache
+[preloading asynchronous module customization hooks]: module.md#registration-of-asynchronous-customization-hooks
 [remote code execution]: https://www.owasp.org/index.php/Code_Injection
 [running tests from the command line]: test.md#running-tests-from-the-command-line
 [scavenge garbage collector]: https://v8.dev/blog/orinoco-parallel-scavenger

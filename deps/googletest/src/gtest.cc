@@ -58,6 +58,7 @@
 #include <ostream>  // NOLINT
 #include <set>
 #include <sstream>
+#include <string_view>
 #include <unordered_set>
 #include <utility>
 #include <vector>
@@ -485,6 +486,15 @@ bool ShouldEmitStackTraceForResultType(TestPartResult::Type type) {
 // AssertHelper constructor.
 AssertHelper::AssertHelper(TestPartResult::Type type, const char* file,
                            int line, const char* message)
+    : AssertHelper(
+          type, file == nullptr ? std::string_view() : std::string_view(file),
+          line,
+          message == nullptr ? std::string_view() : std::string_view(message)) {
+}
+
+AssertHelper::AssertHelper(TestPartResult::Type type,
+                           const std::string_view file, int line,
+                           const std::string_view message)
     : data_(new AssertHelperData(type, file, line, message)) {}
 
 AssertHelper::~AssertHelper() { delete data_; }
@@ -875,7 +885,11 @@ class PositiveAndNegativeUnitTestFilter {
   // and does not match the negative filter.
   bool MatchesTest(const std::string& test_suite_name,
                    const std::string& test_name) const {
+#ifdef GTEST_HAS_ABSL
+    return MatchesName(absl::StrCat(test_suite_name, ".", test_name));
+#else
     return MatchesName(test_suite_name + "." + test_name);
+#endif
   }
 
   // Returns true if and only if name matches the positive filter and does not
@@ -2547,8 +2561,9 @@ void ReportFailureInUnknownLocation(TestPartResult::Type result_type,
   // AddTestPartResult.
   UnitTest::GetInstance()->AddTestPartResult(
       result_type,
-      nullptr,  // No info about the source file where the exception occurred.
-      -1,       // We have no info on which line caused the exception.
+      std::string_view(),  // No info about the source file where the exception
+                           // occurred.
+      -1,  // We have no info on which line caused the exception.
       message,
       "");  // No stack trace, either.
 }
@@ -5132,7 +5147,7 @@ void OsStackTraceGetter::UponLeavingGTest() GTEST_LOCK_EXCLUDED_(mutex_) {
 #endif  // GTEST_HAS_ABSL
 }
 
-#ifdef GTEST_HAS_DEATH_TEST
+#ifdef GTEST_INTERNAL_HAS_PREMATURE_EXIT_FILE
 // A helper class that creates the premature-exit file in its
 // constructor and deletes the file in its destructor.
 class ScopedPrematureExitFile {
@@ -5170,7 +5185,7 @@ class ScopedPrematureExitFile {
   ScopedPrematureExitFile(const ScopedPrematureExitFile&) = delete;
   ScopedPrematureExitFile& operator=(const ScopedPrematureExitFile&) = delete;
 };
-#endif  // GTEST_HAS_DEATH_TEST
+#endif  // GTEST_INTERNAL_HAS_PREMATURE_EXIT_FILE
 
 }  // namespace internal
 
@@ -5428,8 +5443,8 @@ Environment* UnitTest::AddEnvironment(Environment* env) {
 // this to report their results.  The user code should use the
 // assertion macros instead of calling this directly.
 void UnitTest::AddTestPartResult(TestPartResult::Type result_type,
-                                 const char* file_name, int line_number,
-                                 const std::string& message,
+                                 const std::string_view file_name,
+                                 int line_number, const std::string& message,
                                  const std::string& os_stack_trace)
     GTEST_LOCK_EXCLUDED_(mutex_) {
   Message msg;
@@ -5515,7 +5530,7 @@ void UnitTest::RecordProperty(const std::string& key,
 // We don't protect this under mutex_, as we only support calling it
 // from the main thread.
 int UnitTest::Run() {
-#ifdef GTEST_HAS_DEATH_TEST
+#ifdef GTEST_INTERNAL_HAS_PREMATURE_EXIT_FILE
   const bool in_death_test_child_process =
       !GTEST_FLAG_GET(internal_run_death_test).empty();
 
@@ -5546,7 +5561,7 @@ int UnitTest::Run() {
           : internal::posix::GetEnv("TEST_PREMATURE_EXIT_FILE"));
 #else
   const bool in_death_test_child_process = false;
-#endif  // GTEST_HAS_DEATH_TEST
+#endif  // GTEST_INTERNAL_HAS_PREMATURE_EXIT_FILE
 
   // Captures the value of GTEST_FLAG(catch_exceptions).  This value will be
   // used for the duration of the program.

@@ -1709,6 +1709,10 @@ Removes files and directories (modeled on the standard POSIX `rm` utility).
 <!-- YAML
 added: v10.0.0
 changes:
+  - version: v25.7.0
+    pr-url: https://github.com/nodejs/node/pull/61178
+    description: Accepts a `throwIfNoEntry` option to specify whether
+                 an exception should be thrown if the entry does not exist.
   - version: v10.5.0
     pr-url: https://github.com/nodejs/node/pull/20220
     description: Accepts an additional `options` object to specify whether
@@ -1719,6 +1723,9 @@ changes:
 * `options` {Object}
   * `bigint` {boolean} Whether the numeric values in the returned
     {fs.Stats} object should be `bigint`. **Default:** `false`.
+  * `throwIfNoEntry` {boolean} Whether an exception will be thrown
+    if no file system entry exists, rather than returning `undefined`.
+    **Default:** `true`.
 * Returns: {Promise}  Fulfills with the {fs.Stats} object for the
   given `path`.
 
@@ -1837,6 +1844,10 @@ added:
   * `overflow` {string} Either `'ignore'` or `'throw'` when there are more events to be
     queued than `maxQueue` allows. `'ignore'` means overflow events are dropped and a
     warning is emitted, while `'throw'` means to throw an exception. **Default:** `'ignore'`.
+  * `ignore` {string|RegExp|Function|Array} Pattern(s) to ignore. Strings are
+    glob patterns (using [`minimatch`][]), RegExp patterns are tested against
+    the filename, and functions receive the filename and return `true` to
+    ignore. **Default:** `undefined`.
 * Returns: {AsyncIterator} of objects with the properties:
   * `eventType` {string} The type of change
   * `filename` {string|Buffer|null} The name of the file changed.
@@ -4405,6 +4416,10 @@ completion callback.
 <!-- YAML
 added: v0.0.2
 changes:
+  - version: v25.7.0
+    pr-url: https://github.com/nodejs/node/pull/61178
+    description: Accepts a `throwIfNoEntry` option to specify whether
+                 an exception should be thrown if the entry does not exist.
   - version: v18.0.0
     pr-url: https://github.com/nodejs/node/pull/41678
     description: Passing an invalid callback to the `callback` argument
@@ -4432,6 +4447,9 @@ changes:
 * `options` {Object}
   * `bigint` {boolean} Whether the numeric values in the returned
     {fs.Stats} object should be `bigint`. **Default:** `false`.
+  * `throwIfNoEntry` {boolean} Whether an exception will be thrown
+    if no file system entry exists, rather than returning `undefined`.
+    **Default:** `true`.
 * `callback` {Function}
   * `err` {Error}
   * `stats` {fs.Stats}
@@ -4804,6 +4822,10 @@ changes:
   * `encoding` {string} Specifies the character encoding to be used for the
     filename passed to the listener. **Default:** `'utf8'`.
   * `signal` {AbortSignal} allows closing the watcher with an AbortSignal.
+  * `ignore` {string|RegExp|Function|Array} Pattern(s) to ignore. Strings are
+    glob patterns (using [`minimatch`][]), RegExp patterns are tested against
+    the filename, and functions receive the filename and return `true` to
+    ignore. **Default:** `undefined`.
 * `listener` {Function|undefined} **Default:** `undefined`
   * `eventType` {string}
   * `filename` {string|Buffer|null}
@@ -7133,8 +7155,8 @@ added: v0.1.93
 
 * Extends: {stream.Readable}
 
-Instances of {fs.ReadStream} are created and returned using the
-[`fs.createReadStream()`][] function.
+Instances of {fs.ReadStream} cannot be constructed directly. They are created and
+returned using the [`fs.createReadStream()`][] function.
 
 #### Event: `'close'`
 
@@ -7904,8 +7926,8 @@ added: v0.1.93
 
 * Extends {stream.Writable}
 
-Instances of {fs.WriteStream} are created and returned using the
-[`fs.createWriteStream()`][] function.
+Instances of {fs.WriteStream} cannot be constructed directly. They are created and
+returned using the [`fs.createWriteStream()`][] function.
 
 #### Event: `'close'`
 
@@ -8702,7 +8724,7 @@ the file contents.
 [File access constants]: #file-access-constants
 [File modes]: #file-modes
 [MDN-Date]: https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Date
-[MDN-Number]: https://developer.mozilla.org/en-US/docs/Web/JavaScript/Data_structures#Number_type
+[MDN-Number]: https://developer.mozilla.org/en-US/docs/Web/JavaScript/Guide/Data_structures#number_type
 [MSDN-Rel-Path]: https://docs.microsoft.com/en-us/windows/desktop/FileIO/naming-a-file#fully-qualified-vs-relative-paths
 [MSDN-Using-Streams]: https://docs.microsoft.com/en-us/windows/desktop/FileIO/using-streams
 [Naming Files, Paths, and Namespaces]: https://docs.microsoft.com/en-us/windows/desktop/FileIO/naming-a-file
@@ -8764,6 +8786,7 @@ the file contents.
 [`fsPromises.utimes()`]: #fspromisesutimespath-atime-mtime
 [`inotify(7)`]: https://man7.org/linux/man-pages/man7/inotify.7.html
 [`kqueue(2)`]: https://www.freebsd.org/cgi/man.cgi?query=kqueue&sektion=2
+[`minimatch`]: https://github.com/isaacs/minimatch
 [`util.promisify()`]: util.md#utilpromisifyoriginal
 [bigints]: https://tc39.github.io/proposal-bigint
 [caveats]: #caveats

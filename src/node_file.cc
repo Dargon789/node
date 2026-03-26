@@ -810,6 +810,22 @@ void AfterStat(uv_fs_t* req) {
   }
 }
 
+void AfterStatNoThrowIfNoEntry(uv_fs_t* req) {
+  FSReqBase* req_wrap = FSReqBase::from_req(req);
+  FSReqAfterScope after(req_wrap, req);
+
+  FS_ASYNC_TRACE_END1(
+      req->fs_type, req_wrap, "result", static_cast<int>(req->result))
+  if (req->result == UV_ENOENT || req->result == UV_ENOTDIR) {
+    req_wrap->Resolve(Undefined(req_wrap->env()->isolate()));
+    return;
+  }
+
+  if (after.Proceed()) {
+    req_wrap->ResolveStat(&req->statbuf);
+  }
+}
+
 void AfterStatFs(uv_fs_t* req) {
   FSReqBase* req_wrap = FSReqBase::from_req(req);
   FSReqAfterScope after(req_wrap, req);
@@ -1105,7 +1121,9 @@ static void Stat(const FunctionCallbackInfo<Value>& args) {
   ToNamespacedPath(env, &path);
 
   bool use_bigint = args[1]->IsTrue();
-  if (!args[2]->IsUndefined()) {  // stat(path, use_bigint, req)
+  if (!args[2]->IsUndefined()) {  // stat(path, use_bigint, req,
+                                  // do_not_throw_if_no_entry)
+    bool do_not_throw_if_no_entry = args[3]->IsFalse();
     FSReqBase* req_wrap_async = GetReqWrap(args, 2, use_bigint);
     CHECK_NOT_NULL(req_wrap_async);
     ASYNC_THROW_IF_INSUFFICIENT_PERMISSIONS(
@@ -1115,8 +1133,25 @@ static void Stat(const FunctionCallbackInfo<Value>& args) {
         path.ToStringView());
     FS_ASYNC_TRACE_BEGIN1(
         UV_FS_STAT, req_wrap_async, "path", TRACE_STR_COPY(*path))
-    AsyncCall(env, req_wrap_async, args, "stat", UTF8, AfterStat,
-              uv_fs_stat, *path);
+    if (do_not_throw_if_no_entry) {
+      AsyncCall(env,
+                req_wrap_async,
+                args,
+                "stat",
+                UTF8,
+                AfterStatNoThrowIfNoEntry,
+                uv_fs_stat,
+                *path);
+    } else {
+      AsyncCall(env,
+                req_wrap_async,
+                args,
+                "stat",
+                UTF8,
+                AfterStat,
+                uv_fs_stat,
+                *path);
+    }
   } else {  // stat(path, use_bigint, undefined, do_not_throw_if_no_entry)
     THROW_IF_INSUFFICIENT_PERMISSIONS(
         env, permission::PermissionScope::kFileSystemRead, path.ToStringView());
@@ -1634,9 +1669,9 @@ static void RmSync(const FunctionCallbackInfo<Value>& args) {
   ToNamespacedPath(env, &path);
   THROW_IF_INSUFFICIENT_PERMISSIONS(
       env, permission::PermissionScope::kFileSystemWrite, path.ToStringView());
-  auto file_path = std::filesystem::path(path.ToStringView());
+  auto file_path = path.ToPath();
   std::error_code error;
-  auto file_status = std::filesystem::status(file_path, error);
+  auto file_status = std::filesystem::symlink_status(file_path, error);
 
   if (file_status.type() == std::filesystem::file_type::not_found) {
     return;
@@ -1649,8 +1684,7 @@ static void RmSync(const FunctionCallbackInfo<Value>& args) {
   // File is a directory and recursive is false
   if (file_status.type() == std::filesystem::file_type::directory &&
       !recursive) {
-    return THROW_ERR_FS_EISDIR(
-        isolate, "Path is a directory: %s", file_path.c_str());
+    return THROW_ERR_FS_EISDIR(isolate, "Path is a directory: %s", path);
   }
 
   // Allowed errors are:
@@ -1956,11 +1990,18 @@ static void RealPath(const FunctionCallbackInfo<Value>& args) {
   if (argc > 2) {  // realpath(path, encoding, req)
     FSReqBase* req_wrap_async = GetReqWrap(args, 2);
     CHECK_NOT_NULL(req_wrap_async);
+    ASYNC_THROW_IF_INSUFFICIENT_PERMISSIONS(
+        env,
+        req_wrap_async,
+        permission::PermissionScope::kFileSystemRead,
+        path.ToStringView());
     FS_ASYNC_TRACE_BEGIN1(
         UV_FS_REALPATH, req_wrap_async, "path", TRACE_STR_COPY(*path))
     AsyncCall(env, req_wrap_async, args, "realpath", encoding, AfterStringPtr,
               uv_fs_realpath, *path);
   } else {  // realpath(path, encoding, undefined, ctx)
+    THROW_IF_INSUFFICIENT_PERMISSIONS(
+        env, permission::PermissionScope::kFileSystemRead, path.ToStringView());
     FSReqWrapSync req_wrap_sync("realpath", *path);
     FS_SYNC_TRACE_BEGIN(realpath);
     int err =
@@ -2315,8 +2356,10 @@ static void WriteBuffer(const FunctionCallbackInfo<Value>& args) {
   const int argc = args.Length();
   CHECK_GE(argc, 4);
 
-  CHECK(args[0]->IsInt32());
-  const int fd = args[0].As<Int32>()->Value();
+  int fd;
+  if (!GetValidatedFd(env, args[0]).To(&fd)) {
+    return;
+  }
 
   CHECK(Buffer::HasInstance(args[1]));
   Local<Object> buffer_obj = args[1].As<Object>();
@@ -2382,8 +2425,10 @@ static void WriteBuffers(const FunctionCallbackInfo<Value>& args) {
   const int argc = args.Length();
   CHECK_GE(argc, 3);
 
-  CHECK(args[0]->IsInt32());
-  const int fd = args[0].As<Int32>()->Value();
+  int fd;
+  if (!GetValidatedFd(env, args[0]).To(&fd)) {
+    return;
+  }
 
   CHECK(args[1]->IsArray());
   Local<Array> chunks = args[1].As<Array>();
@@ -2442,8 +2487,10 @@ static void WriteString(const FunctionCallbackInfo<Value>& args) {
 
   const int argc = args.Length();
   CHECK_GE(argc, 4);
-  CHECK(args[0]->IsInt32());
-  const int fd = args[0].As<Int32>()->Value();
+  int fd;
+  if (!GetValidatedFd(env, args[0]).To(&fd)) {
+    return;
+  }
 
   const int64_t pos = GetOffset(args[2]);
 
@@ -2635,8 +2682,10 @@ static void Read(const FunctionCallbackInfo<Value>& args) {
   const int argc = args.Length();
   CHECK_GE(argc, 5);
 
-  CHECK(args[0]->IsInt32());
-  const int fd = args[0].As<Int32>()->Value();
+  int fd;
+  if (!GetValidatedFd(env, args[0]).To(&fd)) {
+    return;
+  }
 
   CHECK(Buffer::HasInstance(args[1]));
   Local<Object> buffer_obj = args[1].As<Object>();
@@ -2766,8 +2815,10 @@ static void ReadBuffers(const FunctionCallbackInfo<Value>& args) {
   const int argc = args.Length();
   CHECK_GE(argc, 3);
 
-  CHECK(args[0]->IsInt32());
-  const int fd = args[0].As<Int32>()->Value();
+  int fd;
+  if (!GetValidatedFd(env, args[0]).To(&fd)) {
+    return;
+  }
 
   CHECK(args[1]->IsArray());
   Local<Array> buffers = args[1].As<Array>();
@@ -3381,15 +3432,18 @@ static void CpSyncOverrideFile(const FunctionCallbackInfo<Value>& args) {
   THROW_IF_INSUFFICIENT_PERMISSIONS(
       env, permission::PermissionScope::kFileSystemWrite, dest.ToStringView());
 
+  auto src_path = src.ToPath();
+  auto dest_path = dest.ToPath();
+
   std::error_code error;
 
-  if (!std::filesystem::remove(*dest, error)) {
+  if (!std::filesystem::remove(dest_path, error)) {
     return env->ThrowStdErrException(error, "unlink", *dest);
   }
 
   if (mode == 0) {
     // if no mode is specified use the faster std::filesystem API
-    if (!std::filesystem::copy_file(*src, *dest, error)) {
+    if (!std::filesystem::copy_file(src_path, dest_path, error)) {
       return env->ThrowStdErrException(error, "cp", *dest);
     }
   } else {
@@ -3402,7 +3456,7 @@ static void CpSyncOverrideFile(const FunctionCallbackInfo<Value>& args) {
   }
 
   if (preserve_timestamps) {
-    CopyUtimes(*src, *dest, env);
+    CopyUtimes(src_path, dest_path, env);
   }
 }
 
@@ -3445,8 +3499,11 @@ static void CpSyncCopyDir(const FunctionCallbackInfo<Value>& args) {
   bool verbatim_symlinks = args[5]->IsTrue();
   bool preserve_timestamps = args[6]->IsTrue();
 
+  auto src_path = src.ToPath();
+  auto dest_path = dest.ToPath();
+
   std::error_code error;
-  std::filesystem::create_directories(*dest, error);
+  std::filesystem::create_directories(dest_path, error);
   if (error) {
     return env->ThrowStdErrException(error, "cp", *dest);
   }
@@ -3588,7 +3645,7 @@ static void CpSyncCopyDir(const FunctionCallbackInfo<Value>& args) {
     return true;
   };
 
-  copy_dir_contents(std::filesystem::path(*src), std::filesystem::path(*dest));
+  copy_dir_contents(src_path, dest_path);
 }
 
 BindingData::FilePathIsFileReturnType BindingData::FilePathIsFile(

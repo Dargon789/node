@@ -1,7 +1,7 @@
 ---
-title: config
+title: Config
 section: 7
-description: More than you probably want to know about npm configuration
+description: About npm configuration
 ---
 
 ### Description
@@ -19,6 +19,14 @@ Using `--flag` without specifying any value will set the value to `true`.
 
 Example: `--flag1 --flag2` will set both configuration parameters to `true`, while `--flag1 --flag2 bar` will set `flag1` to `true`, and `flag2` to `bar`.
 Finally, `--flag1 --flag2 -- bar` will set both configuration parameters to `true`, and the `bar` is taken as a command argument.
+
+**Common examples:**
+
+* `npm install --prefix /path/to/dir` - Runs npm commands in a different directory without changing the current working directory
+* `npm install --global` - Installs packages globally (shorthand: `-g`)
+* `npm install --save-dev` - Saves to devDependencies (shorthand: `-D`)
+
+Any configuration option documented in the [Config Settings](#config-settings) section below can be set via command line flags using `--option-name value` syntax.
 
 #### Environment Variables
 
@@ -157,6 +165,24 @@ upon by the current project.
 
 
 
+#### `allow-git`
+
+* Default: "all"
+* Type: "all", "none", or "root"
+
+Limits the ability for npm to fetch dependencies from git references. That
+is, dependencies that point to a git repo instead of a version or semver
+range. Please note that this could leave your tree incomplete and some
+packages may not function as intended or designed.
+
+`all` allows any git dependencies to be fetched and installed. `none`
+prevents any git dependencies from being fetched and installed. `root` only
+allows git dependencies defined in your project's package.json to be fetched
+installed. Also allows git dependencies to be fetched for other commands
+like `npm view`
+
+
+
 #### `allow-same-version`
 
 * Default: false
@@ -214,7 +240,7 @@ If the requested version is a `dist-tag` and the given tag does not pass the
 will be used. For example, `foo@latest` might install `foo@1.2` even though
 `latest` is `2.0`.
 
-
+This config cannot be used with: `min-release-age`
 
 #### `bin-links`
 
@@ -1045,6 +1071,21 @@ Any "%s" in the message will be replaced with the version number.
 
 
 
+#### `min-release-age`
+
+* Default: null
+* Type: null or Number
+
+If set, npm will build the npm tree such that only versions that were
+available more than the given number of days ago will be installed. If there
+are no versions available for the current set of dependencies, the command
+will error.
+
+This flag is a complement to `before`, which accepts an exact date instead
+of a relative number of days.
+
+This config cannot be used with: `before`
+
 #### `name`
 
 * Default: null
@@ -1138,8 +1179,7 @@ time.
 * Type: null or String (can be set multiple times)
 
 When creating a Granular Access Token with `npm token create`, this limits
-the token access to specific organizations. Provide a comma-separated list
-of organization names.
+the token access to specific organizations.
 
 
 
@@ -1227,8 +1267,7 @@ For `list` this means the output will be based on the tree described by the
 * Type: null or String (can be set multiple times)
 
 When creating a Granular Access Token with `npm token create`, this limits
-the token access to specific packages. Provide a comma-separated list of
-package names.
+the token access to specific packages.
 
 
 
@@ -1564,8 +1603,8 @@ npm init --scope=@foo --yes
 * Type: null or String (can be set multiple times)
 
 When creating a Granular Access Token with `npm token create`, this limits
-the token access to specific scopes. Provide a comma-separated list of scope
-names (with or without @ prefix).
+the token access to specific scopes. Provide a scope name (with or without @
+prefix).
 
 
 

@@ -19,7 +19,7 @@ on:
           - amaro
           - brotli
           - c-ares
-          - cjs-module-lexer
+          - merve
           - corepack
           - googletest
           - gyp-next
@@ -38,7 +38,7 @@ on:
           - root-certificates
           - simdjson
           - sqlite
-          - temporal
+          - test426-fixtures
           - undici
           - uvwasi
           - zlib
@@ -53,6 +53,7 @@ permissions:
 jobs:
   tools-deps-update:
     if: github.repository == 'nodejs/node' || github.event_name == 'workflow_dispatch'
+    # cannot use ubuntu-slim here because some update scripts require Docker
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false  # Prevent other jobs from aborting if one fails
@@ -106,11 +107,11 @@ jobs:
               cat temp-output
               tail -n1 temp-output | grep "NEW_VERSION=" >> "$GITHUB_ENV" || true
               rm temp-output
-          - id: cjs-module-lexer
+          - id: merve
             subsystem: deps
             label: dependencies
             run: |
-              ./tools/dep_updaters/update-cjs-module-lexer.sh > temp-output
+              ./tools/dep_updaters/update-merve.sh > temp-output
               cat temp-output
               tail -n1 temp-output | grep "NEW_VERSION=" >> "$GITHUB_ENV" || true
               rm temp-output
@@ -256,11 +257,11 @@ jobs:
               cat temp-output
               tail -n1 temp-output | grep "NEW_VERSION=" >> "$GITHUB_ENV" || true
               rm temp-output
-          - id: temporal
-            subsystem: deps
-            label: dependencies
+          - id: test426-fixtures
+            subsystem: test
+            label: test
             run: |
-              ./tools/dep_updaters/update-temporal.sh > temp-output
+              bash tools/dep_updaters/update-test426-fixtures.sh > temp-output
               cat temp-output
               tail -n1 temp-output | grep "NEW_VERSION=" >> "$GITHUB_ENV" || true
               rm temp-output
@@ -301,7 +302,7 @@ jobs:
         run: |
            git config --global user.name "Node.js GitHub Bot"
            git config --global user.email "github-bot@iojs.org"
-      - uses: actions/checkout@1af3b93b6815bc44a9784bd300feb67ff0d1eeb3  # v6.0.0
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2
         if: github.event_name == 'schedule' || inputs.id == 'all' || inputs.id == matrix.id
         with:
           persist-credentials: false
@@ -309,13 +310,13 @@ jobs:
         if: |
           (matrix.id == 'icu' || matrix.id == 'inspector_protocol') &&
           (github.event_name == 'schedule' || inputs.id == 'all' || inputs.id == matrix.id)
-        uses: actions/setup-python@83679a892e2d95755f2dac6acb0bfd1e9ac5d548  # v6.1.0
+        uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405  # v6.2.0
         with:
           python-version: ${{ env.PYTHON_VERSION }}
           allow-prereleases: true
       - name: Set up Nix
         if: matrix.id == 'nixpkgs-unstable' && (github.event_name == 'schedule' || inputs.id == 'all' || inputs.id == matrix.id)
-        uses: cachix/install-nix-action@0b0e072294b088b73964f1d72dfdac0951439dbd  # v31.8.4
+        uses: cachix/install-nix-action@2126ae7fc54c9df00dd18f7f18754393182c73cd  # v31.9.1
       - run: ${{ matrix.run }}
         if: github.event_name == 'schedule' || inputs.id == 'all' || inputs.id == matrix.id
         env:
@@ -324,7 +325,7 @@ jobs:
         if: env.COMMIT_MSG == '' && (github.event_name == 'schedule' || inputs.id == 'all' || inputs.id == matrix.id)
         run: |
           echo "COMMIT_MSG=${{ matrix.subsystem }}: update ${{ matrix.id }} to ${{ env.NEW_VERSION }}" >> "$GITHUB_ENV"
-      - uses: peter-evans/create-pull-request@84ae59a2cdc2258d6fa0732dd66352dddae2a412  # v7.0.9
+      - uses: peter-evans/create-pull-request@c0f553fe549906ede9cf27b5156039d195d2ece0  # v8.1.0
         if: github.event_name == 'schedule' || inputs.id == 'all' || inputs.id == matrix.id
         # Creates a PR or update the Action's existing PR, or
         # no-op if the base branch is already up-to-date.
